@@ -12,9 +12,13 @@
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="icon" href="icon-192.png">
+    <!-- 🔤 폰에는 맑은 고딕이 없으므로 가장 비슷한 나눔고딕을 불러옴 (PC에서는 맑은 고딕 그대로) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap">
     <style>
         :root {
-            --tsm-font: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif;
+            --tsm-font: 'Malgun Gothic', '맑은 고딕', 'Nanum Gothic', 'Apple SD Gothic Neo', sans-serif;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body, html {
