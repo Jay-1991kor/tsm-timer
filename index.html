@@ -706,7 +706,16 @@
             }
 
             db.ref('.info/serverTimeOffset').on('value', (s) => { myOffset = s.val() || 0; });
-            db.ref('.info/connected').on('value', (s) => { netOk = s.val() === true; refreshBadge(); });
+            // 📱 이 폰이 보고 있음을 PC에 알림 (연결이 끊기면 자동 삭제)
+            const me = roomRef.child('viewers').push();
+            db.ref('.info/connected').on('value', (s) => {
+                netOk = s.val() === true;
+                if (netOk) {
+                    me.onDisconnect().remove();
+                    me.set(true);
+                }
+                refreshBadge();
+            });
             roomRef.child('pcOffset').on('value', (s) => { pcOffset = s.val() || 0; });
             roomRef.child('online').on('value', (s) => { pcOnline = s.val() === true; refreshBadge(); });
 
