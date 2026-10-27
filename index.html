@@ -158,6 +158,7 @@
             width: 100%;
             padding: 0 6%;
             color: #ffffff;
+            font-family: 'Nanum Gothic', var(--tsm-font);
             font-weight: 700;
             white-space: pre-wrap;
             word-break: keep-all;
@@ -510,9 +511,16 @@
             logoImg.style.height = logoCfg.size + '%';
         }
 
+        let lastMode = '';
         function renderScreen(data) {
             if (!data) return;
             lastRenderData = data;
+            // 프롬프터 ↔ 다른 모드 전환 시 화면 크기(PC 비율 / 꽉 채움)를 다시 맞춤
+            const mode = data.mode === 'prompter' ? 'prompter' : 'full';
+            if (mode !== lastMode) {
+                lastMode = mode;
+                fitScreen();
+            }
             applyLogo();
 
             const isPrompter = data.mode === 'prompter';
@@ -581,12 +589,24 @@
             }
         }
 
-        /* 📐 폰 화면을 꽉 채우고, 글자 크기 기준(--base-ratio)을 화면 폭에 맞춤 */
+        /* 📐 화면 크기 맞춤
+           - 타이머·메시지: 폰 화면을 꽉 채움
+           - 프롬프터: PC 송출 화면과 같은 비율의 상자(남는 곳은 검은 여백) → 줄바꿈·위치가 PC와 동일
+           글자 크기 기준(--base-ratio)은 상자 폭의 1% */
+        let pcRatio = 16 / 9;
         function fitScreen() {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            let w = vw;
+            let h = vh;
+            if (lastRenderData && lastRenderData.mode === 'prompter') {
+                if (vw / vh > pcRatio) w = vh * pcRatio;
+                else h = vw / pcRatio;
+            }
             displayAreaEl.style.width = w + 'px';
             displayAreaEl.style.height = h + 'px';
+            displayAreaEl.style.left = ((vw - w) / 2) + 'px';
+            displayAreaEl.style.top = ((vh - h) / 2) + 'px';
             displayAreaEl.style.setProperty('--base-ratio', (w / 100) + 'px');
             if (lastRenderData && lastRenderData.mode === 'message' && lastRenderData.text !== '') {
                 fitMessageToScreen(lastRenderData.fontSize);
@@ -717,6 +737,11 @@
                 refreshBadge();
             });
             roomRef.child('pcOffset').on('value', (s) => { pcOffset = s.val() || 0; });
+            roomRef.child('ratio').on('value', (s) => {
+                const r = parseFloat(s.val());
+                pcRatio = r > 0.2 && r < 10 ? r : 16 / 9;
+                fitScreen();
+            });
             roomRef.child('online').on('value', (s) => { pcOnline = s.val() === true; refreshBadge(); });
 
             roomRef.child('state').on('value', (s) => {
