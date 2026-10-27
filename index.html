@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>TSM 타이머</title>
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TSM 타이머">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" href="icon-192.png">
+    <style>
+        :root {
+            --tsm-font: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            color: #ffffff;
+            font-family: var(--tsm-font);
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #window-wrapper {
+            position: fixed;
+            inset: 0;
+            background-color: #000000;
+        }
+
+        #display-area {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background-color: #000000;
+            position: absolute;
+        }
+
+        @keyframes pulseGlow {
+            0% { text-shadow: 0 0 20px var(--glow-color, rgba(255,255,255,0.2)); opacity: 0.9; }
+            50% { text-shadow: 0 0 45px var(--glow-color, rgba(255,255,255,0.7)); opacity: 1; }
+            100% { text-shadow: 0 0 20px var(--glow-color, rgba(255,255,255,0.2)); opacity: 0.9; }
+        }
+
+        @keyframes blinkEffect {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        #view-text {
+            font-size: 24vw;
+            font-weight: 900;
+            line-height: 1.1;
+            text-align: center;
+            color: #ffffff;
+            word-break: keep-all;
+            --glow-color: rgba(255, 255, 255, 0.4);
+            animation: pulseGlow 2.5s infinite ease-in-out;
+            font-family: var(--tsm-font);
+            font-variant-numeric: tabular-nums;
+            transition: color 0.3s ease, font-size 0.3s ease, transform 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+        #view-text.init-mode {
+            font-size: 8vw !important;
+            color: #2ed573 !important;
+            --glow-color: rgba(46, 213, 115, 0.5);
+        }
+        #view-text.yellow-time { color: #ffeb3b !important; --glow-color: rgba(255, 235, 59, 0.7); }
+        #view-text.red-time { color: #ff4757 !important; --glow-color: rgba(255, 71, 87, 0.8); }
+        #view-text.clock-time { color: #00d2d3 !important; --glow-color: rgba(0, 210, 211, 0.6); }
+        #view-text.message-mode { max-width: 92%; word-break: keep-all; overflow-wrap: anywhere; }
+        #view-text.blink-active {
+            animation: pulseGlow 2.5s infinite ease-in-out, blinkEffect 1s infinite steps(1) !important;
+        }
+
+        #bottom-msg {
+            position: absolute;
+            left: 50%;
+            bottom: 4%;
+            transform: translateX(-50%);
+            width: 92%;
+            text-align: center;
+            font-weight: 900;
+            line-height: 1.2;
+            white-space: pre-wrap;
+            word-break: keep-all;
+            overflow-wrap: anywhere;
+            color: #00ffff;
+            --glow-color: rgba(0, 255, 255, 0.7);
+            text-shadow: 0 0 calc(var(--base-ratio, 1px) * 1.2) var(--glow-color);
+            font-family: var(--tsm-font);
+            pointer-events: none;
+            z-index: 3;
+            display: none;
+        }
+        #bottom-msg.blink-active { animation: blinkEffect 1s infinite steps(1); }
+
+        #logo-layer {
+            position: absolute;
+            inset: 0;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 0;
+        }
+        #logo-img { object-fit: contain; }
+        #logo-layer.pos-tl, #logo-layer.pos-tr { align-items: flex-start; padding: 2.5%; }
+        #logo-layer.pos-tl { justify-content: flex-start; }
+        #logo-layer.pos-tr { justify-content: flex-end; }
+        #logo-layer.pos-tl #logo-img { object-position: left top; }
+        #logo-layer.pos-tr #logo-img { object-position: right top; }
+
+        #clock-overlay {
+            position: absolute;
+            top: 4%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: calc(var(--base-ratio, 1px) * 4.5);
+            font-weight: 700;
+            color: #00d2d3;
+            text-shadow: 0 0 12px rgba(0, 210, 211, 0.6);
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 3;
+            display: none;
+        }
+
+        #prompter-view {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            background: transparent;
+            z-index: 2;
+            display: none;
+            isolation: isolate;
+        }
+        #prompter-view.mirror { transform: scaleX(-1); }
+        #prompter-text {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            padding: 0 6%;
+            color: #ffffff;
+            font-weight: 700;
+            white-space: pre-wrap;
+            word-break: keep-all;
+            overflow-wrap: anywhere;
+            will-change: transform;
+        }
+        #prompter-guide {
+            position: absolute;
+            left: 0; right: 0;
+            top: 35%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.14);
+            box-shadow: 0 0 0 1px rgba(255, 71, 87, 0.25);
+            pointer-events: none;
+            z-index: -1;
+        }
+        #prompter-guide::before, #prompter-guide::after {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #ff4757;
+            font-size: calc(var(--base-ratio, 1px) * 2.5);
+        }
+        #prompter-guide::before { content: '▶'; left: 1%; }
+        #prompter-guide::after { content: '◀'; right: 1%; }
+        #prompter-corner {
+            position: absolute;
+            top: 3%;
+            right: 3%;
+            padding: 0.2em 0.5em;
+            border-radius: 0.3em;
+            background: rgba(0, 0, 0, 0.7);
+            color: #ffeb3b;
+            font-size: calc(var(--base-ratio, 1px) * 3);
+            font-weight: 700;
+            pointer-events: none;
+            display: none;
+        }
+
+        /* 📶 연결 상태 표시 (연결되면 3초 후 사라짐, 끊기면 계속 표시) */
+        #link-badge {
+            position: fixed;
+            top: max(10px, env(safe-area-inset-top));
+            left: max(10px, env(safe-area-inset-left));
+            z-index: 20;
+            padding: 5px 12px;
+            border-radius: 20px;
+            background: rgba(30, 30, 30, 0.85);
+            border: 1px solid #444;
+            color: #a4b0be;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+            transition: opacity 0.6s ease;
+        }
+        #link-badge.ok { color: #2ed573; border-color: #2ed573; }
+        #link-badge.bad { color: #ff4757; border-color: #ff4757; }
+        #link-badge.hide { opacity: 0; }
+
+        #tap-hint {
+            position: fixed;
+            bottom: max(14px, env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            padding: 6px 14px;
+            border-radius: 20px;
+            background: rgba(30, 30, 30, 0.85);
+            color: #a4b0be;
+            font-size: 13px;
+            white-space: nowrap;
+            pointer-events: none;
+            transition: opacity 0.6s ease;
+        }
+        #tap-hint.hide { opacity: 0; }
+
+        /* 🔑 방 코드 입력 화면 */
+        #room-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 30;
+            background: #000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 16px;
+            text-align: center;
+        }
+        #room-screen h2 { font-size: 1.4rem; }
+        #room-screen p { color: #a4b0be; font-size: 0.95rem; line-height: 1.5; }
+        #room-screen input {
+            width: min(280px, 100%);
+            padding: 12px;
+            border: 2px solid #333;
+            border-radius: 6px;
+            background: #111;
+            color: #fff;
+            font-size: 1.1rem;
+            text-align: center;
+            outline: none;
+            -webkit-user-select: text;
+            user-select: text;
+        }
+        #room-screen input:focus { border-color: #2ed573; }
+        #room-screen button {
+            width: min(280px, 100%);
+            padding: 12px;
+            font-size: 1.05rem;
+            font-weight: bold;
+            background: #2ed573;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+        }
+        #room-msg { color: #ff4757; min-height: 1.2em; }
+    </style>
+</head>
+<body>
+    <div id="window-wrapper">
+        <div id="display-area">
+            <div id="logo-layer"><img id="logo-img" alt=""></div>
+            <div id="view-text" class="init-mode">TSM by.osj</div>
+            <div id="clock-overlay"></div>
+            <div id="bottom-msg"></div>
+            <div id="prompter-view">
+                <div id="prompter-text"></div>
+                <div id="prompter-guide"></div>
+                <div id="prompter-corner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="link-badge">⏳ 연결 중...</div>
+    <div id="tap-hint">화면을 터치하면 전체화면</div>
+
+    <div id="room-screen">
+        <h2>📱 TSM 타이머 수신</h2>
+        <p>PC 타이머의 「📱 폰 송출」 창에 보이는<br>방 코드를 입력하세요.</p>
+        <input type="text" id="room-input" placeholder="방 코드" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="room-ok">연결</button>
+        <div id="room-msg"></div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script>
+        /* 🔧 Firebase 설정: PC 타이머에 넣은 것과 같은 값을 붙여넣기 */
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyDsBjsjBjv32yjS_mGidriLVRNkOeYqANk",
+            authDomain: "tsm-web-app-timer.firebaseapp.com",
+            databaseURL: "https://tsm-web-app-timer-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tsm-web-app-timer",
+            storageBucket: "tsm-web-app-timer.firebasestorage.app",
+            messagingSenderId: "832727333866",
+            appId: "1:832727333866:web:999442f5c691d40492d093"
+        };
+    </script>
+    <script>
+        const viewText = document.getElementById('view-text');
+        const displayAreaEl = document.getElementById('display-area');
+        const clockOverlay = document.getElementById('clock-overlay');
+        const prompterView = document.getElementById('prompter-view');
+        const prompterText = document.getElementById('prompter-text');
+        const prompterGuide = document.getElementById('prompter-guide');
+        const prompterCorner = document.getElementById('prompter-corner');
+        const bottomMsgEl = document.getElementById('bottom-msg');
+        const linkBadge = document.getElementById('link-badge');
+        const tapHint = document.getElementById('tap-hint');
+
+        let lastRenderData = null;
+
+        /* ⏱️ PC 시계 기준 시각: 서버 시간을 기준으로 PC와 폰의 시계 차이를 보정
+           (PC 시각 = 폰 시각 + 폰 서버오차 - PC 서버오차) */
+        let myOffset = 0;
+        let pcOffset = 0;
+        function pcNow() {
+            return Date.now() + myOffset - pcOffset;
+        }
+
+        function fitMessageToScreen(baseSize) {
+            let size = parseFloat(baseSize) || 11;
+            viewText.style.transition = 'none';
+            viewText.style.fontSize = `calc(var(--base-ratio, 1px) * ${size})`;
+            const maxH = displayAreaEl.clientHeight * 0.92;
+            if (maxH > 0) {
+                while (viewText.offsetHeight > maxH && size > 2) {
+                    size -= 0.5;
+                    viewText.style.fontSize = `calc(var(--base-ratio, 1px) * ${size})`;
+                }
+            }
+            void viewText.offsetHeight;
+            viewText.style.transition = '';
+        }
+
+        let lastBottomKey = '';
+        function applyBottomMsg(bm) {
+            if (!bm) {
+                bottomMsgEl.style.display = 'none';
+                viewText.style.transform = '';
+                lastBottomKey = '';
+                return;
+            }
+            bottomMsgEl.style.display = 'block';
+            bottomMsgEl.classList.toggle('blink-active', bm.blink === true);
+            const key = [bm.text, bm.color, bm.fontSize, displayAreaEl.clientWidth, displayAreaEl.clientHeight].join('|');
+            if (key !== lastBottomKey) {
+                lastBottomKey = key;
+                bottomMsgEl.textContent = bm.text;
+                bottomMsgEl.style.color = bm.color;
+                bottomMsgEl.style.setProperty('--glow-color', bm.color + 'b3');
+                let size = (parseFloat(bm.fontSize) || 11) * 0.5;
+                bottomMsgEl.style.fontSize = `calc(var(--base-ratio, 1px) * ${size})`;
+                const maxH = displayAreaEl.clientHeight * 0.3;
+                while (maxH > 0 && bottomMsgEl.offsetHeight > maxH && size > 1.5) {
+                    size -= 0.25;
+                    bottomMsgEl.style.fontSize = `calc(var(--base-ratio, 1px) * ${size})`;
+                }
+            }
+            const shift = (bottomMsgEl.offsetHeight + displayAreaEl.clientHeight * 0.04) / 2;
+            viewText.style.transform = `translateY(${-shift}px)`;
+        }
+
+        function nowTimeStr() {
+            const now = new Date(pcNow());
+            return [now.getHours(), now.getMinutes(), now.getSeconds()]
+                .map(n => String(n).padStart(2, '0')).join(':');
+        }
+
+        function formatElapsed(ms) {
+            const total = Math.floor(Math.max(0, ms) / 1000);
+            const h = Math.floor(total / 3600);
+            const m = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+            const s = String(total % 60).padStart(2, '0');
+            return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+        }
+
+        function prompterMaxPos() {
+            const d = lastRenderData;
+            if (!d || d.mode !== 'prompter') return Infinity;
+            const br = displayAreaEl.clientWidth / 100;
+            if (!br) return Infinity;
+            const lineUnits = parseFloat(d.fontSize) * parseFloat(d.lineHeight);
+            return Math.max(0, prompterText.offsetHeight / br - lineUnits);
+        }
+
+        function prompterTick() {
+            const d = lastRenderData;
+            if (!d || d.mode !== 'prompter') return;
+            const now = pcNow();
+            const br = displayAreaEl.clientWidth / 100;
+            const lineUnits = parseFloat(d.fontSize) * parseFloat(d.lineHeight);
+            const maxPos = prompterMaxPos();
+
+            let pos = d.pos0 + (d.playing ? d.speed * (now - d.t0) / 1000 : 0);
+            if (pos > maxPos) pos = maxPos;
+            if (pos < 0) pos = 0;
+
+            const y = displayAreaEl.clientHeight * 0.35 - pos * br - (lineUnits * br) / 2;
+            prompterText.style.transform = `translateY(${y}px)`;
+
+            const elapsedMs = d.cornerStart ? now - d.cornerStart : 0;
+            if (d.corner === 'clock') {
+                prompterCorner.textContent = '🕒 ' + nowTimeStr();
+            } else if (d.corner === 'elapsed') {
+                prompterCorner.textContent = '⏱ ' + formatElapsed(elapsedMs);
+            } else if (d.corner === 'timer') {
+                const left = Math.ceil(((d.cornerTimer || 0) * 1000 - elapsedMs) / 1000);
+                prompterCorner.textContent = '⏳ ' + formatTimer(left);
+                prompterCorner.style.color = left <= 0 ? '#ff4757' : '';
+            }
+        }
+
+        function prompterLoop() {
+            prompterTick();
+            requestAnimationFrame(prompterLoop);
+        }
+        requestAnimationFrame(prompterLoop);
+
+        setInterval(() => {
+            if (clockOverlay.style.display === 'block') clockOverlay.textContent = nowTimeStr();
+        }, 250);
+
+        function formatTimer(seconds) {
+            const abs = Math.abs(seconds);
+            const mins = String(Math.floor(abs / 60)).padStart(2, '0');
+            const secs = String(abs % 60).padStart(2, '0');
+            return `${seconds < 0 ? '-' : ''}${mins}:${secs}`;
+        }
+
+        function timerValueOf(d) {
+            let left = d.base;
+            if (d.running) {
+                const elapsed = Math.floor((pcNow() - d.startMs) / 1000);
+                left = d.timerType === 'up' ? d.base + elapsed : d.base - elapsed;
+            }
+            if (d.timerType === 'down' && !d.overtime && left < 0) left = 0;
+            return left;
+        }
+
+        function computeTimerDisplay(d) {
+            if (d.timerType === 'clock') return { text: nowTimeStr(), cls: 'clock-time' };
+            const left = timerValueOf(d);
+            let cls = '';
+            if (d.timerType === 'down') {
+                if (left <= 0 && d.overtime) cls = 'red-time';
+                else if (left <= d.red) cls = 'red-time';
+                else if (left <= d.yellow) cls = 'yellow-time';
+            }
+            return { text: formatTimer(left), cls };
+        }
+
+        let lastTimerKey = '';
+        setInterval(() => {
+            const d = lastRenderData;
+            if (!d || d.isInit || d.mode !== 'timer') return;
+            const shown = computeTimerDisplay(d);
+            if (shown.text + '|' + shown.cls !== lastTimerKey) renderScreen(d);
+        }, 100);
+
+        function renderPrompter(d) {
+            if (prompterText.textContent !== d.text) prompterText.textContent = d.text;
+            prompterText.style.fontSize = `calc(var(--base-ratio, 1px) * ${d.fontSize})`;
+            prompterText.style.lineHeight = d.lineHeight;
+            prompterText.style.letterSpacing = `${(parseFloat(d.letterSpacing) || 0) / 100}em`;
+            if (d.corner !== 'timer') prompterCorner.style.color = '';
+            prompterView.classList.toggle('mirror', !!d.mirror);
+            prompterGuide.style.display = d.guide ? 'block' : 'none';
+            prompterGuide.style.height = `calc(var(--base-ratio, 1px) * ${parseFloat(d.fontSize) * parseFloat(d.lineHeight)})`;
+            prompterCorner.style.display = d.corner === 'none' ? 'none' : 'block';
+            prompterTick();
+        }
+
+        const logoLayer = document.getElementById('logo-layer');
+        const logoImg = document.getElementById('logo-img');
+        let logoSrc = '';
+        let logoCfg = { on: false, pos: 'center', opacity: 15, size: 50 };
+
+        function applyLogo() {
+            const d = lastRenderData;
+            const hidden = d && d.mode === 'message' && d.text === '';
+            const show = logoCfg.on && !!logoSrc && !hidden;
+            logoLayer.style.display = show ? 'flex' : 'none';
+            if (!show) return;
+            if (logoImg.getAttribute('src') !== logoSrc) logoImg.src = logoSrc;
+            logoLayer.className = 'pos-' + (logoCfg.pos || 'center');
+            logoImg.style.opacity = logoCfg.opacity / 100;
+            logoImg.style.width = logoCfg.size + '%';
+            logoImg.style.height = logoCfg.size + '%';
+        }
+
+        function renderScreen(data) {
+            if (!data) return;
+            lastRenderData = data;
+            applyLogo();
+
+            const isPrompter = data.mode === 'prompter';
+            prompterView.style.display = isPrompter ? 'block' : 'none';
+            const showClock = !data.isInit && data.mode === 'timer' && data.showClock;
+            clockOverlay.style.display = showClock ? 'block' : 'none';
+            if (showClock) clockOverlay.textContent = nowTimeStr();
+            applyBottomMsg(!data.isInit && data.mode === 'timer' && data.bottomMsg ? data.bottomMsg : null);
+
+            if (isPrompter) {
+                viewText.className = '';
+                viewText.textContent = '';
+                renderPrompter(data);
+                return;
+            }
+
+            viewText.className = '';
+            viewText.style.color = '';
+            viewText.style.fontSize = '';
+            viewText.style.whiteSpace = 'nowrap';
+
+            if (data.isInit) {
+                viewText.textContent = data.text;
+                viewText.classList.add('init-mode');
+                viewText.style.fontSize = 'calc(var(--base-ratio, 1px) * 8)';
+                return;
+            }
+
+            if (data.mode === 'message') {
+                if (data.text === "") {
+                    viewText.textContent = '';
+                    return;
+                }
+                viewText.textContent = data.text;
+                viewText.style.whiteSpace = 'pre-wrap';
+                viewText.classList.add('message-mode');
+                viewText.style.color = data.color;
+                viewText.style.setProperty('--glow-color', data.color + 'b3');
+
+                if (data.blink === true) viewText.classList.add('blink-active');
+                fitMessageToScreen(data.fontSize);
+            } else {
+                const shown = computeTimerDisplay(data);
+                lastTimerKey = shown.text + '|' + shown.cls;
+                viewText.textContent = shown.text;
+                viewText.style.whiteSpace = 'nowrap';
+
+                if (data.forcedFontSize) {
+                    viewText.style.fontSize = `calc(var(--base-ratio, 1px) * ${data.forcedFontSize})`;
+                } else {
+                    viewText.style.fontSize = 'calc(var(--base-ratio, 1px) * 24)';
+                }
+
+                if (data.blink === true) viewText.classList.add('blink-active');
+                if (data.customColor) {
+                    viewText.style.setProperty('color', data.customColor, 'important');
+                    viewText.style.setProperty('--glow-color', data.customColor + '99');
+                } else {
+                    viewText.style.removeProperty('--glow-color');
+                }
+                if (shown.cls) {
+                    viewText.classList.add(shown.cls);
+                } else if (!data.customColor) {
+                    viewText.style.setProperty('--glow-color', 'rgba(255, 255, 255, 0.4)');
+                }
+            }
+        }
+
+        /* 📐 폰 화면을 꽉 채우고, 글자 크기 기준(--base-ratio)을 화면 폭에 맞춤 */
+        function fitScreen() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            displayAreaEl.style.width = w + 'px';
+            displayAreaEl.style.height = h + 'px';
+            displayAreaEl.style.setProperty('--base-ratio', (w / 100) + 'px');
+            if (lastRenderData && lastRenderData.mode === 'message' && lastRenderData.text !== '') {
+                fitMessageToScreen(lastRenderData.fontSize);
+            }
+            if (lastRenderData && lastRenderData.mode === 'timer' && lastRenderData.bottomMsg) {
+                renderScreen(lastRenderData);
+            }
+        }
+        window.addEventListener('resize', fitScreen);
+        window.addEventListener('orientationchange', () => setTimeout(fitScreen, 300));
+        fitScreen();
+        renderScreen({ isInit: true, text: 'TSM by.osj' });
+
+        /* 📺 터치하면 전체화면 + 가로 고정 + 화면 꺼짐 방지 */
+        let wakeLock = null;
+        async function keepAwake() {
+            try {
+                if ('wakeLock' in navigator && !wakeLock) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { wakeLock = null; });
+                }
+            } catch (e) {}
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') keepAwake();
+        });
+
+        function isFullscreen() {
+            return !!(document.fullscreenElement || document.webkitFullscreenElement)
+                || (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches)
+                || navigator.standalone === true;
+        }
+        function updateTapHint() {
+            tapHint.classList.toggle('hide', isFullscreen());
+        }
+        document.addEventListener('fullscreenchange', () => { updateTapHint(); setTimeout(fitScreen, 200); });
+        document.addEventListener('webkitfullscreenchange', () => { updateTapHint(); setTimeout(fitScreen, 200); });
+        // 아이폰처럼 전체화면을 지원하지 않는 경우 안내는 5초 후 숨김
+        setTimeout(() => { if (!document.documentElement.requestFullscreen) tapHint.classList.add('hide'); }, 5000);
+        updateTapHint();
+
+        document.getElementById('window-wrapper').addEventListener('click', async () => {
+            keepAwake();
+            if (isFullscreen()) return;
+            const el = document.documentElement;
+            try {
+                if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+                else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+                if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
+            } catch (e) {}
+        });
+
+        /* 📶 연결 상태 배지 */
+        let badgeTimer = null;
+        function setBadge(text, cls, autoHide) {
+            linkBadge.textContent = text;
+            linkBadge.className = cls || '';
+            clearTimeout(badgeTimer);
+            if (autoHide) badgeTimer = setTimeout(() => linkBadge.classList.add('hide'), 3000);
+        }
+
+        /* 🔑 방 코드: 주소의 #코드 → 없으면 지난번 코드 (홈 화면 앱으로 열 때) */
+        const roomScreen = document.getElementById('room-screen');
+        const roomInput = document.getElementById('room-input');
+        const roomMsg = document.getElementById('room-msg');
+
+        function savedRoom() {
+            try { return localStorage.getItem('tsm_view_room') || ''; } catch (e) { return ''; }
+        }
+        function saveRoom(room) {
+            try { localStorage.setItem('tsm_view_room', room); } catch (e) {}
+        }
+        function cleanRoom(s) {
+            return String(s || '').trim().replace(/^#/, '').replace(/[^A-Za-z0-9_-]/g, '');
+        }
+
+        function askRoom(message) {
+            roomScreen.style.display = 'flex';
+            roomMsg.textContent = message || '';
+            roomInput.value = savedRoom();
+        }
+        document.getElementById('room-ok').addEventListener('click', () => {
+            const room = cleanRoom(roomInput.value);
+            if (room.length < 10) { roomMsg.textContent = '방 코드가 올바르지 않습니다.'; return; }
+            saveRoom(room);
+            location.hash = room;
+            location.reload();
+        });
+        roomInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('room-ok').click();
+        });
+
+        function start() {
+            if (!FIREBASE_CONFIG.databaseURL || typeof firebase === 'undefined') {
+                askRoom(typeof firebase === 'undefined'
+                    ? '인터넷 연결을 확인하세요.'
+                    : 'Firebase 설정이 비어 있습니다. (index.html의 FIREBASE_CONFIG)');
+                setBadge('⚠️ 설정 필요', 'bad');
+                return;
+            }
+
+            let room = cleanRoom(location.hash);
+            if (room.length >= 10) saveRoom(room);
+            else room = savedRoom();
+            if (room.length < 10) { askRoom(); setBadge('🔑 방 코드 필요', ''); return; }
+
+            const app = firebase.initializeApp(FIREBASE_CONFIG);
+            const db = app.database();
+            const roomRef = db.ref('rooms/' + room);
+
+            let netOk = false;
+            let pcOnline = false;
+            function refreshBadge() {
+                if (!netOk) setBadge('🔴 인터넷 끊김', 'bad');
+                else if (!pcOnline) setBadge('🟠 PC 송출 대기 중', 'bad');
+                else setBadge('🟢 연결됨', 'ok', true);
+            }
+
+            db.ref('.info/serverTimeOffset').on('value', (s) => { myOffset = s.val() || 0; });
+            db.ref('.info/connected').on('value', (s) => { netOk = s.val() === true; refreshBadge(); });
+            roomRef.child('pcOffset').on('value', (s) => { pcOffset = s.val() || 0; });
+            roomRef.child('online').on('value', (s) => { pcOnline = s.val() === true; refreshBadge(); });
+
+            roomRef.child('state').on('value', (s) => {
+                const raw = s.val();
+                let data = null;
+                try { data = raw ? JSON.parse(raw) : null; } catch (e) {}
+                renderScreen(data || { isInit: true, text: 'TSM by.osj' });
+            });
+            roomRef.child('logo').on('value', (s) => {
+                try { logoCfg = Object.assign(logoCfg, JSON.parse(s.val()) || {}); } catch (e) {}
+                applyLogo();
+            });
+            roomRef.child('logoSrc').on('value', (s) => {
+                logoSrc = s.val() || '';
+                applyLogo();
+            });
+        }
+        start();
+    </script>
+</body>
+</html>
