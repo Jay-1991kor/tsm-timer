@@ -575,7 +575,8 @@
                 }
 
                 if (data.blink === true) viewText.classList.add('blink-active');
-                if (data.customColor) {
+                // 카운트다운 글자색은 주의·임박 색(노랑·빨강)이 아닐 때만
+                if (data.customColor && !shown.cls) {
                     viewText.style.setProperty('color', data.customColor, 'important');
                     viewText.style.setProperty('--glow-color', data.customColor + '99');
                 } else {
