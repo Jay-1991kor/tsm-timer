@@ -633,6 +633,7 @@
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') keepAwake();
         });
+        keepAwake(); // 터치하기 전에도 화면 꺼짐 방지 (안드로이드 크롬은 바로 허용)
 
         function isFullscreen() {
             return !!(document.fullscreenElement || document.webkitFullscreenElement)
@@ -702,9 +703,17 @@
         function start() {
             if (!FIREBASE_CONFIG.databaseURL || typeof firebase === 'undefined') {
                 askRoom(typeof firebase === 'undefined'
-                    ? '인터넷 연결을 확인하세요.'
+                    ? '인터넷 연결을 확인하세요. 연결되면 자동으로 다시 접속합니다.'
                     : 'Firebase 설정이 비어 있습니다. (index.html의 FIREBASE_CONFIG)');
                 setBadge('⚠️ 설정 필요', 'bad');
+                // 📶 인터넷 없이 열렸으면: 연결이 돌아오는 순간 자동으로 다시 불러옴 (10초마다도 확인)
+                if (typeof firebase === 'undefined') {
+                    // Firebase 파일이 실제로 받아지는지 확인한 뒤에만 새로고침 (계속 새로고침되는 것 방지)
+                    const retry = () => fetch('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js', { mode: 'no-cors', cache: 'no-store' })
+                        .then(() => location.reload()).catch(() => {});
+                    window.addEventListener('online', retry);
+                    setInterval(retry, 10000);
+                }
                 return;
             }
 
