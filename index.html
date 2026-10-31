@@ -134,8 +134,8 @@
             transform: translateX(-50%);
             font-size: calc(var(--base-ratio, 1px) * 4.5);
             font-weight: 700;
-            color: #00d2d3;
-            text-shadow: 0 0 12px rgba(0, 210, 211, 0.6);
+            color: #d9c8a5;
+            text-shadow: 0 0 12px rgba(217, 200, 165, 0.5);
             white-space: nowrap;
             pointer-events: none;
             z-index: 3;
@@ -575,8 +575,8 @@
                 }
 
                 if (data.blink === true) viewText.classList.add('blink-active');
-                // 카운트다운 글자색은 주의·임박 색(노랑·빨강)이 아닐 때만
-                if (data.customColor && !shown.cls) {
+                // 고른 글자색은 주의·임박(노랑·빨강) 때만 양보
+                if (data.customColor && shown.cls !== 'yellow-time' && shown.cls !== 'red-time') {
                     viewText.style.setProperty('color', data.customColor, 'important');
                     viewText.style.setProperty('--glow-color', data.customColor + '99');
                 } else {
